@@ -11,13 +11,22 @@ import ij.process.ImageStatistics;
 import java.io.FilenameFilter;
 import java.util.ArrayList;
 import ij.plugin.ContrastEnhancer;
+import java.util.Collections;
 
 public class ImageTagging_ implements PlugInFilter {
 
-	public void run(ImageProcessor ownIp) {
-		ArrayList<Color> listColors = new ArrayList<Color>();
+	private ArrayList<Color> listColors;
+	private ArrayList<String> listColorsName;
+	private ArrayList<Integer> counter;
+	private static final String path = "C:\\Program Files\\ImageJ\\Images";
+
+	public ImageTagging_()
+	{
+		listColors = new ArrayList<Color>();
 		listColors.add(Color.black);
 		listColors.add(Color.blue);
+		listColors.add(Color.cyan);
+		listColors.add(Color.gray);
 		listColors.add(Color.green);
 		listColors.add(Color.orange);
 		listColors.add(Color.pink);
@@ -25,28 +34,47 @@ public class ImageTagging_ implements PlugInFilter {
 		listColors.add(Color.white);
 		listColors.add(Color.yellow);
 
-		String path = "C:\\Program Files\\ImageJ\\Images";
+		listColorsName = new ArrayList<String>();
+		listColorsName.add("black, ");
+		listColorsName.add("blue, ");
+		listColorsName.add("cyan, ");
+		listColorsName.add("gray, ");
+		listColorsName.add("green, ");
+		listColorsName.add("orange, ");
+		listColorsName.add("pink, ");
+		listColorsName.add("red, ");
+		listColorsName.add("white, ");
+		listColorsName.add("yellow, ");
+
+		counter = new ArrayList<Integer>();
+		for (int j = 0; j < listColors.size(); j++)
+			counter.add(0);
+	}
+
+	public void run(ImageProcessor ownIp) {
 	  	File[] files = listFiles(path);
+	  	int width, height;
+	  	int[] rgb = new int[3]; // Permet de stoker un pixel sous forme RGB
 
    		if (files.length != 0) {
    			try {
+   				// Parcours de l'enembles des images du dossier avec l'extension .jpg
 	    		for (int i = 0; i < files.length; i++) {
 
 					// Remise à zéro des fichiers textes si existe, sinon création
 			    	PrintWriter writer = new PrintWriter("Images/"+files[i].getName()+".txt", "UTF-8");
-			    	writer.close();
-
+			    	
 			    	// Création d’une image temporaire
 				    ImagePlus tempImg = new ImagePlus(files[i].getAbsolutePath());
 				    ImageProcessor ip = tempImg.getProcessor();
 
-			    	int width = ip.getWidth(), height = ip.getHeight();
-					int[] rgb = new int[3];
-					double meilleurDistance = 0, distance = 0;
-					int[] counter = new int[10];
+				    // Récupération des dimensions de l'image
+			    	width = ip.getWidth();
+			    	height = ip.getHeight();
 					
-					for (int j = 0; j < 10; j++)
-						counter[j] = 0;
+					// Remise à zéro des conteurs
+					for (int p = 0; p < listColors.size(); p++)
+						counter.set(p, 0);
 					
 					int indexTemp = 0;
 
@@ -55,59 +83,97 @@ public class ImageTagging_ implements PlugInFilter {
 					{
 						for (int x = 0; x < width; x++)
 						{
-							ip.getPixel(x,y,rgb); // Récupération d'un pixel à la position x et y
+							// Récupération d'un pixel à la position x et y
+							ip.getPixel(x,y,rgb);
 
-							// Recherche la couleur la plus similaire à celle calculée
-							int index = 0;
-							for(Color c : listColors)
-							{
-								// Calcul de la distance entre la couleur calculée et une couleur de référence (voir l'arraylist)
-								Color color = new Color(rgb[0], rgb[1], rgb[2]);
+							// Récupération de l'indice de la couleur qui se rapproche le plus du pixel fourni en paramètre
+							indexTemp = distance(new Color(rgb[0], rgb[1], rgb[2]), listColors);
 
-								distance = distanceEuclidienne(color, c);
-
-								if (index == 0) {
-									meilleurDistance = distance;
-									indexTemp = index;
-								}
-								else
-									if (distance < meilleurDistance) {
-										meilleurDistance = distance;
-										indexTemp = index;
-									}
-									
-								index++;
-							}
-							counter[indexTemp] += 1;
+							// Incrémente la couleur qui se rapprochait le plus du pixel
+							counter.set(indexTemp, counter.get(indexTemp) + 1);
 						}
-					}					
+					}
+					// Insertion des deux couleurs les plus présentes dans le fichier txt
+					affichage(counter, listColors, listColorsName, writer);
+					writer.close();
 		   		}
-
 		    } catch (IOException e) {
 			  	IJ.showMessage("Impossible de créer les fichiers textes, annulation du tagging");
 		    }
    		}
 	}
 
-	public double distance(Color c1, Color c2)
+	// Permet de savoir quelle couleur se rapproche le plus du pixel fourni en paramètre
+	public int distance(Color c1, ArrayList<Color> listColors)
 	{
-		int red1 = c1.getRed();
-	    int red2 = c2.getRed();
-	    int rmean = (red1 + red2) >> 1;
-	    int r = red1 - red2;
-	    int g = c1.getGreen() - c2.getGreen();
-	    int b = c1.getBlue() - c2.getBlue();
-	    return Math.sqrt((((512+rmean)*r*r)>>8) + 4*g*g + (((767-rmean)*b*b)>>8));
+		// Récupération des couleurs du pixel
+		int rouge = c1.getRed(), vert = c1.getGreen(), bleu = c1.getBlue();
+
+		// Traitement de la couleur grise
+		if (rouge > 75 && rouge < 180)
+			if (vert > 75 && vert < 180)
+				if (bleu > 75 && bleu < 180)
+					return listColors.indexOf(Color.gray); // (128, 128, 128)
+
+
+		if (rouge < 128)
+		{
+			if (vert < 128)
+			{
+				if (bleu < 128)
+					return listColors.indexOf(Color.black); // (0, 0, 0)
+				else
+					return listColors.indexOf(Color.blue); // (0, 0, 255)
+			}
+			else
+			{
+				if (bleu < 128)
+					return listColors.indexOf(Color.green); // (0, 255, 0)
+				else
+					return listColors.indexOf(Color.cyan); // (0, 255, 255)
+			}
+		}
+		else
+		{
+			if (vert < 128 && bleu < 128)
+				return listColors.indexOf(Color.red); // (255, 0, 0)
+			else
+			{
+				if (vert < 215)
+				{
+					if (bleu < 128)
+						return listColors.indexOf(Color.orange); // (255, 200, 0)
+					else
+						return listColors.indexOf(Color.pink); // (255, 175, 175)
+				}
+				else
+				{
+					if (bleu < 128)
+						return listColors.indexOf(Color.yellow); // (255, 255, 0)
+					else
+						return listColors.indexOf(Color.white); // (255, 255, 255)
+				}
+			}
+		}
 	}
 
-	public double distanceEuclidienne(Color c1, Color c2)
+	// Ajout le nom des deux couleurs dans le fichier texte (les deux plus grandes valeurs de l'arraylist)
+	public void affichage(ArrayList<Integer> counter, ArrayList<Color> listColors, ArrayList<String> listColorsName,  PrintWriter writer)
 	{
-		return Math.sqrt(Math.pow(c2.getRed() - c1.getRed(), 2) + Math.pow(c2.getGreen() - c1.getGreen(), 2) + Math.pow(c2.getBlue() - c1.getBlue(), 2));
+		// Récupère l'indice de la valeur maximum (donc de la couleur dominante)
+		int index = counter.indexOf(Collections.max(counter));
+
+		// Une fois l'indice récupéré, on peut retrouver le nom de la couleur correspondante (qui est ajouté au fichier txt)
+		writer.println(listColorsName.get(index));
+
+		// Mise à zéro de la plus grande pour permettre de trouver la deuxième plus grande
+		counter.set(index, 0);
+
+		// Même principe pour la deuxième couleur
+		writer.println(listColorsName.get(counter.indexOf(Collections.max(counter))));
 	}
 
-
-	// TODO
-
+	// Retourne un tableau d'objet de Type file contenant l'ensemble des images du dossier fourni en paramètre
    	public File[] listFiles(String directoryPath) {
 			File[] files = null;
 			File directoryToScan = new File(directoryPath);
@@ -122,6 +188,7 @@ public class ImageTagging_ implements PlugInFilter {
 			return files;
    	}
 
+   // Démarrage du plugin
    public int setup(String arg, ImagePlus imp) {
 	  	if (arg.equals("about")) {
 	   		IJ.showMessage("Traitement de l'image");
