@@ -73,8 +73,7 @@ public class ImageTagging_ implements PlugInFilter {
 			    	height = ip.getHeight();
 					
 					// Remise à zéro des conteurs
-					for (int p = 0; p < listColors.size(); p++)
-						counter.set(p, 0);
+					resetCounter();
 					
 					int indexTemp = 0;
 
@@ -87,14 +86,19 @@ public class ImageTagging_ implements PlugInFilter {
 							ip.getPixel(x,y,rgb);
 
 							// Récupération de l'indice de la couleur qui se rapproche le plus du pixel fourni en paramètre
-							indexTemp = distance(new Color(rgb[0], rgb[1], rgb[2]), listColors);
+							indexTemp = distance(new Color(rgb[0], rgb[1], rgb[2]));
 
 							// Incrémente la couleur qui se rapprochait le plus du pixel
 							counter.set(indexTemp, counter.get(indexTemp) + 1);
 						}
 					}
+
 					// Insertion des deux couleurs les plus présentes dans le fichier txt
-					affichage(counter, listColors, listColorsName, writer);
+					affichage(writer);
+
+					// Analyse l'image pour détecter la présence ou non du ciel
+					detecterCiel(ip, writer);
+
 					writer.close();
 		   		}
 		    } catch (IOException e) {
@@ -103,19 +107,59 @@ public class ImageTagging_ implements PlugInFilter {
    		}
 	}
 
+	// Analyse l'image pour détecter la présence ou non du ciel dans une image
+	public void detecterCiel(ImageProcessor ip, PrintWriter writer)
+	{
+		int[] rgb = new int[3]; // Permet de stoker un pixel sous forme RGB
+		int width = ip.getWidth();
+
+		// La hauteur de l'image est divisé par 4 de manière à analyser que le haut de l'image car c'est la position ou se trouve le ciel dans l'image
+		int height = ip.getHeight() / 4;
+
+		resetCounter(); // Remise à zéro des conteurs
+
+		// Augmentation du contrast de 75% pour permettre de mieux faire ressortir la couleur bleu du ciel
+		ContrastEnhancer ceh = new ContrastEnhancer();
+		ceh.stretchHistogram(ip, 75.0);
+
+		int indexTemp;
+		for (int y = 0; y < height; y++)
+		{
+			for (int x = 0; x < width; x++)
+			{
+				ip.getPixel(x,y,rgb); // Récupération d'un pixel (RGB)
+
+				// Récupération de l'indice de la couleur qui se rapproche le plus du pixel fourni en paramètre
+				indexTemp = distance(new Color(rgb[0], rgb[1], rgb[2]));
+
+				// Incrémente la couleur qui se rapprochait le plus du pixel
+				counter.set(indexTemp, counter.get(indexTemp) + 1);
+			}
+		}
+
+		// Récupération de la couleur dominante de l'image
+		Color c = listColors.get(counter.indexOf(Collections.max(counter)));
+
+		// Si la couleur est bleu foncé ou bleu clair, alors ciel détécté donc ajout de "sky" et "outside" dans le fichier txt
+		if (c.equals(Color.blue) || c.equals(Color.cyan)) {
+			writer.println("sky, ");
+			writer.println("outside, ");
+		}
+	}
+
 	// Permet de savoir quelle couleur se rapproche le plus du pixel fourni en paramètre
-	public int distance(Color c1, ArrayList<Color> listColors)
+	public int distance(Color c1)
 	{
 		// Récupération des couleurs du pixel
 		int rouge = c1.getRed(), vert = c1.getGreen(), bleu = c1.getBlue();
 
 		// Traitement de la couleur grise
-		if (rouge > 75 && rouge < 180)
-			if (vert > 75 && vert < 180)
-				if (bleu > 75 && bleu < 180)
+		if (rouge > 85 && rouge < 160)
+			if (vert > 85 && vert < 160)
+				if (bleu > 85 && bleu < 160)
 					return listColors.indexOf(Color.gray); // (128, 128, 128)
 
-
+		// Traitement des autres couleurs
 		if (rouge < 128)
 		{
 			if (vert < 128)
@@ -139,26 +183,26 @@ public class ImageTagging_ implements PlugInFilter {
 				return listColors.indexOf(Color.red); // (255, 0, 0)
 			else
 			{
-				if (vert < 215)
+				if (bleu < 100)
 				{
-					if (bleu < 128)
-						return listColors.indexOf(Color.orange); // (255, 200, 0)
+					if (vert > 225)
+						return listColors.indexOf(Color.yellow); // (255, 255, 0)
 					else
-						return listColors.indexOf(Color.pink); // (255, 175, 175)
+						return listColors.indexOf(Color.orange); // (255, 200, 0)
 				}
 				else
 				{
-					if (bleu < 128)
-						return listColors.indexOf(Color.yellow); // (255, 255, 0)
-					else
+					if (vert > 200 || bleu > 200)
 						return listColors.indexOf(Color.white); // (255, 255, 255)
+					else
+						return listColors.indexOf(Color.pink); // (255, 175, 175)
 				}
 			}
 		}
 	}
 
 	// Ajout le nom des deux couleurs dans le fichier texte (les deux plus grandes valeurs de l'arraylist)
-	public void affichage(ArrayList<Integer> counter, ArrayList<Color> listColors, ArrayList<String> listColorsName,  PrintWriter writer)
+	public void affichage(PrintWriter writer)
 	{
 		// Récupère l'indice de la valeur maximum (donc de la couleur dominante)
 		int index = counter.indexOf(Collections.max(counter));
@@ -171,6 +215,13 @@ public class ImageTagging_ implements PlugInFilter {
 
 		// Même principe pour la deuxième couleur
 		writer.println(listColorsName.get(counter.indexOf(Collections.max(counter))));
+	}
+
+	// Remet à zéro les valeurs du compteur
+	public void resetCounter()
+	{
+		for (int i = 0; i < listColors.size(); i++)
+			counter.set(i, 0);
 	}
 
 	// Retourne un tableau d'objet de Type file contenant l'ensemble des images du dossier fourni en paramètre
