@@ -74,7 +74,10 @@ public class ImageTagging_ implements PlugInFilter {
 					
 					// Remise à zéro des conteurs
 					resetCounter();
-					
+
+					// Permet d'écrire dans le fichier texte le mot "light" ou "dark" en fonction de la teinte de l'image
+					sombreOuClair(writer, tempImg);
+
 					int indexTemp = 0;
 
 					// Parcours chacun des pixels
@@ -142,8 +145,8 @@ public class ImageTagging_ implements PlugInFilter {
 
 		// Si la couleur est bleu foncé ou bleu clair, alors ciel détécté donc ajout de "sky" et "outside" dans le fichier txt
 		if (c.equals(Color.blue) || c.equals(Color.cyan)) {
-			writer.println("sky, ");
-			writer.println("outside, ");
+			writer.print("sky, ");
+			writer.print("outside, ");
 		}
 	}
 
@@ -208,14 +211,40 @@ public class ImageTagging_ implements PlugInFilter {
 		int index = counter.indexOf(Collections.max(counter));
 
 		// Une fois l'indice récupéré, on peut retrouver le nom de la couleur correspondante (qui est ajouté au fichier txt)
-		writer.println(listColorsName.get(index));
+		writer.print(listColorsName.get(index));
 
 		// Mise à zéro de la plus grande pour permettre de trouver la deuxième plus grande
 		counter.set(index, 0);
 
 		// Même principe pour la deuxième couleur
-		writer.println(listColorsName.get(counter.indexOf(Collections.max(counter))));
+		writer.print(listColorsName.get(counter.indexOf(Collections.max(counter))));
 	}
+
+	// Permet de déterminer si l'image est considérée comme sombre ou clair
+	public void sombreOuClair(PrintWriter writer, ImagePlus tempImg)
+	{
+		new ImageConverter(tempImg).convertToGray8();
+		ImageProcessor ip = tempImg.getProcessor();
+
+		if (AverageNdg(ip) > 127.5)
+			writer.print("light, ");
+		else
+			writer.print("dark, ");
+	}
+
+	// Retourne la moyenne des NdG d’une image en NdG
+	public double AverageNdg(ImageProcessor ip) {
+		byte[] pixels = (byte[]) ip.getPixels();
+		int width = ip.getWidth();
+		int height = ip.getHeight();
+		double total = 0.0;
+
+		for (int y = 0; y < height; y++)
+			for (int x = 0; x < width; x++)
+		   	total += pixels[y * width + x] & 0xff; // Ajout de la valeur de chacun des pixels dans la variable total
+
+		  return total / (width * height);
+   }
 
 	// Remet à zéro les valeurs du compteur
 	public void resetCounter()
